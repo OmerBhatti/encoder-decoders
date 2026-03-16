@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Text ↔ WAV Audio Encoder</title>
+		<style>
+			:root {
+				--bg: #f8f9fb;
+				--text: #222;
+				--card: #fff;
+				--border: #d9dce3;
+				--muted: #4d5563;
+				--link: #1658d6;
+				--link-hover: #0f47b4;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				font-family: Arial, sans-serif;
+				background: var(--bg);
+				color: var(--text);
+				line-height: 1.5;
+			}
+
+			main {
+				max-width: 900px;
+				margin: 44px auto;
+				padding: 0 16px 32px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: 32px;
+			}
+
+			h2 {
+				margin: 0 0 12px;
+				font-size: 22px;
+			}
+
+			h3 {
+				margin: 16px 0 8px;
+				font-size: 17px;
+			}
+
+			.subtitle {
+				margin: 10px 0 24px;
+				color: var(--muted);
+			}
+
+			.back-link {
+				display: inline-block;
+				margin-bottom: 14px;
+				color: var(--link);
+				text-decoration: none;
+				font-weight: 700;
+			}
+
+			.back-link:hover {
+				color: var(--link-hover);
+				text-decoration: underline;
+			}
+
+			.card {
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 16px;
+				margin-top: 14px;
+			}
+
+			textarea {
+				width: 100%;
+				min-height: 120px;
+				padding: 12px;
+				font-size: 16px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				resize: vertical;
+			}
+
+			.actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-top: 12px;
+			}
+
+			button,
+			input[type='file'] {
+				padding: 9px 13px;
+				border-radius: 8px;
+				font-size: 14px;
+			}
+
+			button {
+				border: 1px solid transparent;
+				background: var(--link);
+				color: #fff;
+				cursor: pointer;
+			}
+
+			button:hover {
+				background: var(--link-hover);
+			}
+
+			input[type='file'] {
+				border: 1px solid var(--border);
+				background: #fff;
+				color: var(--muted);
+			}
+
+			pre {
+				white-space: pre-wrap;
+				word-break: break-word;
+				background: #f4f6fa;
+				border: 1px solid var(--border);
+				padding: 12px;
+				border-radius: 8px;
+				margin: 0;
+			}
+
+			.status {
+				font-weight: 700;
+				margin-top: 10px;
+				color: #1e3a8a;
+			}
+
+			@media (max-width: 640px) {
+				h1 {
+					font-size: 28px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<a class="back-link" href="./index.html">← Back to Encoders</a>
+			<h1>Text ↔ WAV Audio Encoder</h1>
+			<p class="subtitle">Convert text into tones and decode tones back into text.</p>
+
+  <section class="card">
+    <h2>Send</h2>
+    <textarea id="inputText">Pack my box with five dozen liquor jugs.
+Sphinx of black quartz, judge my vow.
+Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
+				<div class="actions">
+					<button id="playBtn">Play Message</button>
+					<button id="downloadBtn">Download WAV</button>
+				</div>
+				<div class="status" id="sendStatus">Idle</div>
+				<h3>Encoded Bits</h3>
+				<pre id="encodedBits"></pre>
+			</section>
+
+			<section class="card">
+				<h2>Receive from Microphone</h2>
+				<div class="actions">
+					<button id="startMicBtn">Start Listening</button>
+					<button id="stopMicBtn">Stop Listening & Decode</button>
+				</div>
+				<div class="status" id="receiveStatus">Mic idle</div>
+			</section>
+
+			<section class="card">
+				<h2>Receive from Uploaded Audio File</h2>
+				<div class="actions">
+					<input id="audioFileInput" type="file" accept=".wav,audio/wav,audio/x-wav,audio/*" />
+					<button id="decodeFileBtn">Decode Uploaded File</button>
+				</div>
+				<div class="status" id="fileStatus">No file selected</div>
+			</section>
+
+			<section class="card">
+				<h2>Decoded Output</h2>
+				<h3>Decoded Bits</h3>
+				<pre id="decodedBits"></pre>
+				<h3>Decoded Text</h3>
+				<pre id="decodedText"></pre>
+			</section>
+		</main>
+
+		<script>
+			class AudioTextModem {
+				constructor(options = {}) {
+					this.sampleRate = options.sampleRate || 44100;
+					this.bitDuration = options.bitDuration || 0.08;
+					this.freq0 = options.freq0 || 1200;
+					this.freq1 = options.freq1 || 2200;
+					this.startMarker = options.startMarker || '1010101010101010';
+					this.endMarker = options.endMarker || '1111111100001111';
+				}
+
+				textToBytes(text) {
+					return new TextEncoder().encode(text);
+				}
+
+				bytesToText(bytes) {
+					return new TextDecoder().decode(bytes);
+				}
+
+				byteToBits(byte) {
+					return byte.toString(2).padStart(8, '0');
+				}
+
+				bitsToByte(bits) {
+					return parseInt(bits, 2);
+				}
+
+				textToBits(text) {
+					const bytes = this.textToBytes(text);
+					let payload = '';
+					for (const byte of bytes) {
+						payload += this.byteToBits(byte);
+					}
+					return this.startMarker + payload + this.endMarker;
+				}
+
+				bitsToText(bitString) {
+					const startIndex = bitString.indexOf(this.startMarker);
+					if (startIndex === -1) {
+						throw new Error('Start marker not found');
+					}
+
+					const payloadStart = startIndex + this.startMarker.length;
+					const endIndex = bitString.indexOf(this.endMarker, payloadStart);
+					if (endIndex === -1) {
+						throw new Error('End marker not found');
+					}
+
+					const payloadBits = bitString.slice(payloadStart, endIndex);
+
+					if (payloadBits.length < 8) {
+						throw new Error('Payload too short');
+					}
+
+					const usableLength = payloadBits.length - (payloadBits.length % 8);
+					const alignedBits = payloadBits.slice(0, usableLength);
+
+					const bytes = [];
+					for (let i = 0; i < alignedBits.length; i += 8) {
+						bytes.push(this.bitsToByte(alignedBits.slice(i, i + 8)));
+					}
+
+					return this.bytesToText(new Uint8Array(bytes));
+				}
+
+				generateSamplesFromBits(bitString) {
+					const samplesPerBit = Math.floor(this.sampleRate * this.bitDuration);
+					const totalSamples = samplesPerBit * bitString.length;
+					const samples = new Float32Array(totalSamples);
+
+					let offset = 0;
+
+					for (const bit of bitString) {
+						const freq = bit === '1' ? this.freq1 : this.freq0;
+
+						for (let i = 0; i < samplesPerBit; i++) {
+							const t = i / this.sampleRate;
+							let value = Math.sin(2 * Math.PI * freq * t);
+
+							const fadeSamples = Math.min(120, Math.floor(samplesPerBit * 0.12));
+							if (i < fadeSamples) {
+								value *= i / fadeSamples;
+							} else if (i >= samplesPerBit - fadeSamples) {
+								value *= (samplesPerBit - i) / fadeSamples;
+							}
+
+							samples[offset++] = value * 0.55;
+						}
+					}
+
+					return samples;
+				}
+
+				createAudioBufferFromSamples(audioContext, samples) {
+					const buffer = audioContext.createBuffer(1, samples.length, this.sampleRate);
+					buffer.getChannelData(0).set(samples);
+					return buffer;
+				}
+
+				async playText(text) {
+					const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+						sampleRate: this.sampleRate,
+					});
+
+					if (audioContext.state === 'suspended') {
+						await audioContext.resume();
+					}
+
+					const bits = this.textToBits(text);
+					const samples = this.generateSamplesFromBits(bits);
+					const buffer = this.createAudioBufferFromSamples(audioContext, samples);
+
+					const source = audioContext.createBufferSource();
+					source.buffer = buffer;
+					source.connect(audioContext.destination);
+					source.start();
+
+					return { audioContext, bits, samples, buffer, duration: buffer.duration };
+				}
+
+				detectFrequencyPower(samples, targetFreq) {
+					const N = samples.length;
+					const k = Math.round((N * targetFreq) / this.sampleRate);
+					const omega = (2 * Math.PI * k) / N;
+					const coeff = 2 * Math.cos(omega);
+
+					let q0 = 0;
+					let q1 = 0;
+					let q2 = 0;
+
+					for (let i = 0; i < N; i++) {
+						q0 = coeff * q1 - q2 + samples[i];
+						q2 = q1;
+						q1 = q0;
+					}
+
+					return q1 * q1 + q2 * q2 - coeff * q1 * q2;
+				}
+
+				decodeSamplesToBits(samples) {
+					const samplesPerBit = Math.floor(this.sampleRate * this.bitDuration);
+					const bitCount = Math.floor(samples.length / samplesPerBit);
+					let bits = '';
+
+					for (let bitIndex = 0; bitIndex < bitCount; bitIndex++) {
+						const start = bitIndex * samplesPerBit;
+						const chunk = samples.slice(start, start + samplesPerBit);
+
+						const power0 = this.detectFrequencyPower(chunk, this.freq0);
+						const power1 = this.detectFrequencyPower(chunk, this.freq1);
+
+						bits += power1 > power0 ? '1' : '0';
+					}
+
+					return bits;
+				}
+
+				decodeSamplesToText(samples) {
+					const bits = this.decodeSamplesToBits(samples);
+					const text = this.bitsToText(bits);
+					return { bits, text };
+				}
+
+				float32To16BitPCM(float32Array) {
+					const buffer = new ArrayBuffer(float32Array.length * 2);
+					const view = new DataView(buffer);
+
+					let offset = 0;
+					for (let i = 0; i < float32Array.length; i++, offset += 2) {
+						let s = Math.max(-1, Math.min(1, float32Array[i]));
+						view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+					}
+
+					return new Uint8Array(buffer);
+				}
+
+				createWavBytes(samples) {
+					const pcm = this.float32To16BitPCM(samples);
+					const header = new ArrayBuffer(44);
+					const view = new DataView(header);
+
+					const writeString = (offset, str) => {
+						for (let i = 0; i < str.length; i++) {
+							view.setUint8(offset + i, str.charCodeAt(i));
+						}
+					};
+
+					writeString(0, 'RIFF');
+					view.setUint32(4, 36 + pcm.length, true);
+					writeString(8, 'WAVE');
+					writeString(12, 'fmt ');
+					view.setUint32(16, 16, true);
+					view.setUint16(20, 1, true);
+					view.setUint16(22, 1, true);
+					view.setUint32(24, this.sampleRate, true);
+					view.setUint32(28, this.sampleRate * 2, true);
+					view.setUint16(32, 2, true);
+					view.setUint16(34, 16, true);
+					writeString(36, 'data');
+					view.setUint32(40, pcm.length, true);
+
+					const wav = new Uint8Array(44 + pcm.length);
+					wav.set(new Uint8Array(header), 0);
+					wav.set(pcm, 44);
+
+					return wav;
+				}
+
+				downloadWav(samples, filename = 'audio-message.wav') {
+					const wavBytes = this.createWavBytes(samples);
+					const blob = new Blob([wavBytes], { type: 'audio/wav' });
+					const url = URL.createObjectURL(blob);
+
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = filename;
+					a.click();
+
+					setTimeout(() => URL.revokeObjectURL(url), 1000);
+				}
+			}
+
+			const modem = new AudioTextModem({
+				sampleRate: 44100,
+				bitDuration: 0.08,
+				freq0: 1200,
+				freq1: 2200,
+			});
+
+			const inputText = document.getElementById('inputText');
+			const playBtn = document.getElementById('playBtn');
+			const downloadBtn = document.getElementById('downloadBtn');
+			const startMicBtn = document.getElementById('startMicBtn');
+			const stopMicBtn = document.getElementById('stopMicBtn');
+			const audioFileInput = document.getElementById('audioFileInput');
+			const decodeFileBtn = document.getElementById('decodeFileBtn');
+
+			const sendStatus = document.getElementById('sendStatus');
+			const receiveStatus = document.getElementById('receiveStatus');
+			const fileStatus = document.getElementById('fileStatus');
+			const encodedBits = document.getElementById('encodedBits');
+			const decodedBits = document.getElementById('decodedBits');
+			const decodedText = document.getElementById('decodedText');
+
+			let mediaStream = null;
+			let mediaRecorder = null;
+			let recordedChunks = [];
+
+			function setDecodedResult(result) {
+				decodedBits.textContent = result.bits || '(none)';
+				decodedText.textContent = result.text || '(failed)';
+			}
+
+			function tryDecodeWithOffsets(channelData, modemInstance) {
+				const samplesPerBit = Math.floor(modemInstance.sampleRate * modemInstance.bitDuration);
+				const maxOffset = Math.min(samplesPerBit, channelData.length);
+				const step = Math.max(1, Math.floor(samplesPerBit / 12));
+
+				let bestFailure = 'No usable signal found';
+
+				for (let offset = 0; offset < maxOffset; offset += step) {
+					try {
+						const sliced = channelData.slice(offset);
+						const bits = modemInstance.decodeSamplesToBits(sliced);
+						const text = modemInstance.bitsToText(bits);
+
+						return {
+							success: true,
+							bits,
+							text,
+						};
+					} catch (error) {
+						bestFailure = error.message;
+					}
+				}
+
+				return {
+					success: false,
+					bits: '',
+					text: '',
+					error: bestFailure,
+				};
+			}
+
+			playBtn.addEventListener('click', async () => {
+				try {
+					sendStatus.textContent = 'Encoding and playing...';
+					const text = inputText.value;
+					const result = await modem.playText(text);
+
+					encodedBits.textContent = result.bits;
+					sendStatus.textContent = `Playing (${result.duration.toFixed(2)} sec)`;
+				} catch (error) {
+					sendStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			downloadBtn.addEventListener('click', () => {
+				try {
+					const text = inputText.value;
+					const bits = modem.textToBits(text);
+					const samples = modem.generateSamplesFromBits(bits);
+
+					encodedBits.textContent = bits;
+					modem.downloadWav(samples, 'encoded-message.wav');
+					sendStatus.textContent = 'WAV downloaded';
+				} catch (error) {
+					sendStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			startMicBtn.addEventListener('click', async () => {
+				try {
+					recordedChunks = [];
+					decodedBits.textContent = '';
+					decodedText.textContent = '';
+
+					mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+					mediaRecorder = new MediaRecorder(mediaStream);
+
+					mediaRecorder.ondataavailable = event => {
+						if (event.data.size > 0) {
+							recordedChunks.push(event.data);
+						}
+					};
+
+					mediaRecorder.onstart = () => {
+						receiveStatus.textContent = 'Listening...';
+					};
+
+					mediaRecorder.start();
+				} catch (error) {
+					receiveStatus.textContent = `Mic error: ${error.message}`;
+				}
+			});
+
+			stopMicBtn.addEventListener('click', async () => {
+				try {
+					if (!mediaRecorder) {
+						receiveStatus.textContent = 'Recorder not started';
+						return;
+					}
+
+					receiveStatus.textContent = 'Stopping and decoding...';
+
+					const stopped = new Promise(resolve => {
+						mediaRecorder.onstop = resolve;
+					});
+
+					mediaRecorder.stop();
+					await stopped;
+
+					if (mediaStream) {
+						mediaStream.getTracks().forEach(track => track.stop());
+					}
+
+					const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+					const arrayBuffer = await blob.arrayBuffer();
+
+					const decodeCtx = new (window.AudioContext || window.webkitAudioContext)({
+						sampleRate: modem.sampleRate,
+					});
+
+					const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+					const channel = audioBuffer.getChannelData(0);
+
+					const result = tryDecodeWithOffsets(channel, modem);
+
+					setDecodedResult(result);
+					receiveStatus.textContent = result.success
+						? 'Decoded successfully'
+						: `Decode failed: ${result.error}`;
+				} catch (error) {
+					receiveStatus.textContent = `Decode error: ${error.message}`;
+				}
+			});
+
+			audioFileInput.addEventListener('change', () => {
+				const file = audioFileInput.files?.[0];
+				fileStatus.textContent = file ? `Selected: ${file.name}` : 'No file selected';
+			});
+
+			decodeFileBtn.addEventListener('click', async () => {
+				try {
+					const file = audioFileInput.files?.[0];
+					if (!file) {
+						fileStatus.textContent = 'Please select a WAV/audio file first';
+						return;
+					}
+
+					fileStatus.textContent = `Reading ${file.name}...`;
+					decodedBits.textContent = '';
+					decodedText.textContent = '';
+
+					const arrayBuffer = await file.arrayBuffer();
+
+					const decodeCtx = new (window.AudioContext || window.webkitAudioContext)({
+						sampleRate: modem.sampleRate,
+					});
+
+					const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+
+					const channelCount = audioBuffer.numberOfChannels;
+					const length = audioBuffer.length;
+
+					let merged = new Float32Array(length);
+
+					for (let ch = 0; ch < channelCount; ch++) {
+						const channel = audioBuffer.getChannelData(ch);
+						for (let i = 0; i < length; i++) {
+							merged[i] += channel[i] / channelCount;
+						}
+					}
+
+					const result = tryDecodeWithOffsets(merged, modem);
+
+					setDecodedResult(result);
+					fileStatus.textContent = result.success
+						? `Decoded from file: ${file.name}`
+						: `Failed to decode ${file.name}: ${result.error}`;
+				} catch (error) {
+					fileStatus.textContent = `File decode error: ${error.message}`;
+				}
+			});
+		</script>
+	</body>
+</html>

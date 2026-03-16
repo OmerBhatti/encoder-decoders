@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Text ↔ RGB Pixel Encoder</title>
+
+		<style>
+			:root {
+				--bg: #f8f9fb;
+				--text: #222;
+				--card: #fff;
+				--border: #d9dce3;
+				--muted: #4d5563;
+				--link: #1658d6;
+				--link-hover: #0f47b4;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				font-family: Arial, sans-serif;
+				background: var(--bg);
+				color: var(--text);
+				line-height: 1.5;
+			}
+
+			main {
+				max-width: 900px;
+				margin: 44px auto;
+				padding: 0 16px 32px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: 32px;
+			}
+
+			h2 {
+				margin: 0 0 12px;
+				font-size: 22px;
+			}
+
+			h3 {
+				margin: 16px 0 8px;
+				font-size: 17px;
+			}
+
+			.subtitle {
+				margin: 10px 0 24px;
+				color: var(--muted);
+			}
+
+			.back-link {
+				display: inline-block;
+				margin-bottom: 14px;
+				color: var(--link);
+				text-decoration: none;
+				font-weight: 700;
+			}
+
+			.back-link:hover {
+				color: var(--link-hover);
+				text-decoration: underline;
+			}
+
+			.card {
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 16px;
+				margin-top: 14px;
+			}
+
+			textarea {
+				width: 100%;
+				min-height: 120px;
+				padding: 12px;
+				font-size: 16px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				resize: vertical;
+			}
+
+			.actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-top: 12px;
+			}
+
+			button,
+			input[type='file'] {
+				padding: 9px 13px;
+				border-radius: 8px;
+				font-size: 14px;
+			}
+
+			button {
+				border: 1px solid transparent;
+				background: var(--link);
+				color: #fff;
+				cursor: pointer;
+			}
+
+			button:hover {
+				background: var(--link-hover);
+			}
+
+			input[type='file'] {
+				border: 1px solid var(--border);
+				background: #fff;
+				color: var(--muted);
+			}
+
+			canvas,
+			img {
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				image-rendering: pixelated;
+				max-width: 100%;
+				background: #fff;
+			}
+
+			canvas {
+				display: block;
+			}
+
+			img {
+				display: block;
+				margin-top: 10px;
+			}
+
+			img:not([src]),
+			img[src=''] {
+				display: none;
+			}
+
+			pre {
+				white-space: pre-wrap;
+				word-break: break-word;
+				background: #f4f6fa;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 12px;
+				margin: 0;
+			}
+
+			.status {
+				margin-top: 10px;
+				font-weight: 700;
+				color: #1e3a8a;
+			}
+
+			@media (max-width: 640px) {
+				h1 {
+					font-size: 28px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<a class="back-link" href="./index.html">← Back to Encoders</a>
+			<h1>Text ↔ RGB Pixel Encoder</h1>
+			<p class="subtitle">Encode text into PNG pixel data and decode it back into text.</p>
+
+				<section class="card">
+					<h2>Encode</h2>
+					<textarea id="textInput" rows="6">
+In every generation, people inherit a map of the world that is already marked by roads, stories, and assumptions. We are taught where progress lives, where danger begins, and what kinds of futures are considered realistic. Yet history keeps proving that maps are not prophecies. They are sketches made by ordinary minds under extraordinary pressure, and they become useful only when the next generation is willing to redraw them. The challenge of our time is not a lack of tools, but a shortage of imagination disciplined by responsibility.
+
+Modern life rewards speed, but speed alone can flatten judgment. A quick answer can feel like wisdom even when it is only confidence in a hurry. In classrooms, offices, and online spaces, we often mistake immediacy for clarity because both arrive with the same emotional force. The harder task is to slow down enough to ask what a decision will cost in five years, not five minutes. Civilization advances when people learn to connect the convenience of today with the consequences of tomorrow.
+
+Technology illustrates this tension better than any other field. A single software update can improve communication for millions of people, but the same update can silently exclude users with older devices, limited bandwidth, or different languages. Engineers celebrate elegant systems, and they should, but elegance without inclusion becomes a polished form of neglect. The best builders are not those who create the most complex architecture; they are the ones who design with empathy at the center and treat edge cases as human cases.
+
+Cities offer another lesson. Walk through any growing city and you can see ambition rising in glass towers, transit lines, and startup offices. But look closer and you may also see workers commuting farther, neighborhoods losing identity, and families negotiating higher costs for smaller rooms. Development is not automatically progress. Progress is development that expands dignity instead of concentrating advantage. A city is healthy when the person cleaning the office can still afford to live near the office.
+
+Education, too, stands at a crossroads. We frequently debate curriculum as if content were the only variable that matters, yet students do not learn from syllabi alone. They learn from trust, from stable routines, from adults who believe that struggle is not evidence of inability but a stage of growth. A powerful school is not merely a pipeline to employment; it is a place where curiosity survives pressure and character is practiced before it is tested. Learning should train both competence and conscience.
+
+The workplace is undergoing a similar reset. For decades, productivity was measured by visibility: the longer someone stayed at a desk, the more committed they appeared. Remote and hybrid work disrupted that story and exposed how many habits were symbolic rather than useful. Teams now face a deeper question: are we optimizing for activity, or for outcomes that matter? Healthy organizations replace performative busyness with clear expectations, thoughtful feedback, and the psychological safety to admit uncertainty early.
+
+Environmental responsibility can no longer be treated as a charitable side project. It is an operating constraint for every serious institution, from farms to factories to financial firms. Climate risk is not a future headline waiting to happen; it is already written into insurance costs, migration patterns, and food systems. The practical response is not panic, but redesign: cleaner energy grids, resilient infrastructure, circular manufacturing, and policies that reward long-term stewardship. Sustainability is simply realism applied to resource management.
+
+Public discourse would benefit from the same realism. People often describe polarization as a battle between good and bad actors, yet many conflicts are worsened by incentives that reward outrage over understanding. Platforms amplify what keeps attention, and attention gravitates toward certainty, conflict, and identity. Rebuilding trust requires slower media habits, stronger local institutions, and a renewed respect for evidence even when it complicates our preferred narrative. Democracy is not maintained by agreement; it is maintained by shared commitment to fair process.
+
+On a personal level, resilience is frequently misunderstood as constant strength. In reality, resilient people are not unbreakable; they are recoverable. They build routines that make recovery faster, communities that make recovery possible, and values that make recovery meaningful. Rest, reflection, and boundaries are not luxuries for the privileged few. They are maintenance practices for anyone trying to contribute over decades instead of burning out in a season. Endurance is a strategic advantage in a culture addicted to short bursts.
+
+Leadership matters most where outcomes are uncertain and tradeoffs are unavoidable. Good leaders do not pretend that difficult choices are painless. They explain constraints honestly, involve the right voices early, and own the effects of their decisions. They understand that authority can enforce compliance, but only credibility inspires commitment. In moments of crisis, people remember less about perfect messaging and more about whether leaders were transparent, competent, and humane under pressure.
+
+Art and storytelling remain essential in this landscape because data alone cannot answer questions of meaning. Statistics can tell us what is happening, but stories help us ask why it matters and what should happen next. A society that ignores its artists may still produce wealth, yet it risks losing moral vocabulary for grief, hope, and solidarity. Culture is where communities rehearse empathy before policy demands it. Imagination is not a distraction from reality; it is a method for expanding the range of responsible choices.
+
+If there is a single lesson that ties these themes together, it is that progress is relational. Tools, institutions, and policies succeed when they strengthen the bonds between people and reduce the distance between power and accountability. The future will not be won by one breakthrough, one leader, or one platform. It will be built through thousands of decisions made by people who choose integrity when shortcuts are available, cooperation when cynicism is fashionable, and long-term value when short-term applause is tempting. The map ahead is unfinished, and that is exactly why our choices still matter.
+</textarea>
+
+				<div class="actions">
+					<button id="encodeBtn">Encode</button>
+					<button id="decodeCanvasBtn">Decode Canvas</button>
+					<button id="downloadBtn">Download PNG</button>
+				</div>
+
+				<div class="status" id="status">Idle</div>
+			</section>
+
+			<section class="card">
+				<h2>Decode Uploaded PNG</h2>
+
+				<div class="actions">
+					<input type="file" id="fileInput" accept="image/png" />
+					<button id="decodeFileBtn">Decode File</button>
+				</div>
+
+				<img id="preview" alt="Uploaded PNG preview" />
+
+				<div class="status" id="fileStatus"></div>
+			</section>
+
+			<section class="card">
+				<h2>Canvas Output</h2>
+				<canvas id="canvas"></canvas>
+
+				<h3>Decoded Text</h3>
+				<pre id="output">(none)</pre>
+			</section>
+		</main>
+
+		<script>
+			const MAGIC = [84, 88, 84, 49]; // TXT1
+
+			const encoder = new TextEncoder();
+			const decoder = new TextDecoder();
+
+			const canvas = document.getElementById('canvas');
+			const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+			const textInput = document.getElementById('textInput');
+			const output = document.getElementById('output');
+			const status = document.getElementById('status');
+			const preview = document.getElementById('preview');
+			const fileStatus = document.getElementById('fileStatus');
+
+			function u32ToBytes(num) {
+				return new Uint8Array([(num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255]);
+			}
+
+			function bytesToU32(arr, o) {
+				return ((arr[o] << 24) | (arr[o + 1] << 16) | (arr[o + 2] << 8) | arr[o + 3]) >>> 0;
+			}
+
+			function buildPayload(text) {
+				const textBytes = encoder.encode(text);
+				const lenBytes = u32ToBytes(textBytes.length);
+
+				const payload = new Uint8Array(8 + textBytes.length);
+
+				payload.set(MAGIC, 0);
+				payload.set(lenBytes, 4);
+				payload.set(textBytes, 8);
+
+				return payload;
+			}
+
+			function encodeTextToImage(text) {
+				const payload = buildPayload(text);
+
+				const pixelsNeeded = Math.ceil(payload.length / 3);
+
+				const width = Math.ceil(Math.sqrt(pixelsNeeded));
+				const height = Math.ceil(pixelsNeeded / width);
+
+				const imageData = new ImageData(width, height);
+
+				let payloadIndex = 0;
+
+				for (let i = 0; i < width * height; i++) {
+					const di = i * 4;
+
+					imageData.data[di] = payloadIndex < payload.length ? payload[payloadIndex++] : 0;
+					imageData.data[di + 1] = payloadIndex < payload.length ? payload[payloadIndex++] : 0;
+					imageData.data[di + 2] = payloadIndex < payload.length ? payload[payloadIndex++] : 0;
+					imageData.data[di + 3] = 255;
+				}
+
+				return imageData;
+			}
+
+			function extractRgbBytes(imageData) {
+				const src = imageData.data;
+				const out = new Uint8Array(imageData.width * imageData.height * 3);
+
+				let j = 0;
+
+				for (let i = 0; i < src.length; i += 4) {
+					out[j++] = src[i];
+					out[j++] = src[i + 1];
+					out[j++] = src[i + 2];
+				}
+
+				return out;
+			}
+
+			function decodeImageData(imageData) {
+				const bytes = extractRgbBytes(imageData);
+
+				const magicOk =
+					bytes[0] == MAGIC[0] && bytes[1] == MAGIC[1] && bytes[2] == MAGIC[2] && bytes[3] == MAGIC[3];
+
+				if (!magicOk) throw new Error('Not encoded image');
+
+				const textLength = bytesToU32(bytes, 4);
+
+				const start = 8;
+				const end = start + textLength;
+
+				const textBytes = bytes.slice(start, end);
+
+				return decoder.decode(textBytes);
+			}
+
+			function encode() {
+				try {
+					const imageData = encodeTextToImage(textInput.value);
+
+					canvas.width = imageData.width;
+					canvas.height = imageData.height;
+
+					ctx.putImageData(imageData, 0, 0);
+
+					status.textContent = `Encoded image ${imageData.width} x ${imageData.height}`;
+				} catch (e) {
+					status.textContent = e.message;
+				}
+			}
+
+			function decodeCanvas() {
+				try {
+					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+					const text = decodeImageData(imageData);
+
+					output.textContent = text;
+
+					status.textContent = 'Canvas decoded';
+				} catch (e) {
+					status.textContent = e.message;
+				}
+			}
+
+			function downloadPNG() {
+				const a = document.createElement('a');
+
+				a.href = canvas.toDataURL('image/png');
+				a.download = 'encoded_text.png';
+
+				a.click();
+			}
+
+			async function decodeUploaded(file) {
+				const url = URL.createObjectURL(file);
+
+				preview.src = url;
+
+				const img = new Image();
+				img.src = url;
+
+				await new Promise(res => (img.onload = res));
+
+				const tempCanvas = document.createElement('canvas');
+
+				tempCanvas.width = img.width;
+				tempCanvas.height = img.height;
+
+				const tctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+
+				tctx.drawImage(img, 0, 0);
+
+				const imageData = tctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+				const text = decodeImageData(imageData);
+
+				output.textContent = text;
+
+				fileStatus.textContent = 'Image decoded successfully';
+			}
+
+			document.getElementById('encodeBtn').onclick = encode;
+			document.getElementById('decodeCanvasBtn').onclick = decodeCanvas;
+			document.getElementById('downloadBtn').onclick = downloadPNG;
+
+			document.getElementById('decodeFileBtn').onclick = async () => {
+				const file = document.getElementById('fileInput').files[0];
+
+				if (!file) {
+					fileStatus.textContent = 'Select PNG first';
+					return;
+				}
+
+				try {
+					await decodeUploaded(file);
+				} catch (e) {
+					fileStatus.textContent = e.message;
+				}
+			};
+
+			encode();
+		</script>
+	</body>
+</html>

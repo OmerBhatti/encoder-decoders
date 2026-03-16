@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Encoders</title>
+		<style>
+			:root {
+				--bg: #f8f9fb;
+				--text: #222;
+				--card: #fff;
+				--border: #d9dce3;
+				--link: #1658d6;
+			}
+
+			body {
+				margin: 0;
+				font-family: Arial, sans-serif;
+				background: var(--bg);
+				color: var(--text);
+			}
+
+			main {
+				max-width: 760px;
+				margin: 48px auto;
+				padding: 0 20px;
+			}
+
+			h1 {
+				margin: 0 0 12px;
+				font-size: 32px;
+			}
+
+			p {
+				margin: 0 0 24px;
+			}
+
+			.list {
+				list-style: none;
+				margin: 0;
+				padding: 0;
+				display: grid;
+				gap: 14px;
+			}
+
+			.item {
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 16px;
+			}
+
+			.item a {
+				color: var(--link);
+				text-decoration: none;
+				font-size: 19px;
+				font-weight: 700;
+			}
+
+			.item a:hover {
+				text-decoration: underline;
+			}
+
+			.item p {
+				margin: 8px 0 0;
+				color: #4d5563;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>Encoders</h1>
+			<p>Choose a tool:</p>
+			<ul class="list">
+				<li class="item">
+					<a href="./text-to-rgb.html">Text ↔ RGB Pixel Encoder</a>
+					<p>Encode text into PNG pixel data and decode it back to text.</p>
+				</li>
+				<li class="item">
+					<a href="./text-to-wav.html">Text ↔ WAV Audio Encoder</a>
+					<p>Convert text to audio tones and decode tones back to text.</p>
+				</li>
+			</ul>
+		</main>
+	</body>
+</html>

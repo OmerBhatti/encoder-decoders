@@ -85,6 +85,28 @@
 				resize: vertical;
 			}
 
+			input[type='password'] {
+				width: 100%;
+				padding: 10px 12px;
+				font-size: 15px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				margin-top: 10px;
+			}
+
+			.label {
+				display: block;
+				margin-top: 12px;
+				font-size: 14px;
+				font-weight: 700;
+			}
+
+			.hint {
+				margin-top: 6px;
+				font-size: 13px;
+				color: var(--muted);
+			}
+
 			.actions {
 				display: flex;
 				flex-wrap: wrap;
@@ -195,6 +217,9 @@ Art and storytelling remain essential in this landscape because data alone canno
 
 If there is a single lesson that ties these themes together, it is that progress is relational. Tools, institutions, and policies succeed when they strengthen the bonds between people and reduce the distance between power and accountability. The future will not be won by one breakthrough, one leader, or one platform. It will be built through thousands of decisions made by people who choose integrity when shortcuts are available, cooperation when cynicism is fashionable, and long-term value when short-term applause is tempting. The map ahead is unfinished, and that is exactly why our choices still matter.
 </textarea>
+					<label class="label" for="passwordInput">Optional Password</label>
+					<input id="passwordInput" type="password" placeholder="Leave empty for plain encoding" />
+					<div class="hint">If set, the same password is required to decode.</div>
 
 				<div class="actions">
 					<button id="encodeBtn">Encode</button>
@@ -229,6 +254,7 @@ If there is a single lesson that ties these themes together, it is that progress
 
 		<script>
 			const MAGIC = [84, 88, 84, 49]; // TXT1
+			const ENC_MAGIC = [0, 69, 78, 67, 49, 0]; // \0ENC1\0
 
 			const encoder = new TextEncoder();
 			const decoder = new TextDecoder();
@@ -241,6 +267,7 @@ If there is a single lesson that ties these themes together, it is that progress
 			const status = document.getElementById('status');
 			const preview = document.getElementById('preview');
 			const fileStatus = document.getElementById('fileStatus');
+			const passwordInput = document.getElementById('passwordInput');
 
 			function u32ToBytes(num) {
 				return new Uint8Array([(num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255]);
@@ -250,22 +277,87 @@ If there is a single lesson that ties these themes together, it is that progress
 				return ((arr[o] << 24) | (arr[o + 1] << 16) | (arr[o + 2] << 8) | arr[o + 3]) >>> 0;
 			}
 
-			function buildPayload(text) {
-				const textBytes = encoder.encode(text);
-				const lenBytes = u32ToBytes(textBytes.length);
+			function hasMagic(bytes, magic) {
+				if (bytes.length < magic.length) return false;
+				for (let i = 0; i < magic.length; i++) {
+					if (bytes[i] !== magic[i]) return false;
+				}
+				return true;
+			}
 
-				const payload = new Uint8Array(8 + textBytes.length);
+			async function deriveAesKey(password, salt) {
+				if (!window.crypto?.subtle) {
+					throw new Error('Web Crypto is not supported in this browser');
+				}
+				const passwordKey = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+				return crypto.subtle.deriveKey(
+					{ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+					passwordKey,
+					{ name: 'AES-GCM', length: 256 },
+					false,
+					['encrypt', 'decrypt']
+				);
+			}
+
+			async function protectBytes(textBytes, password) {
+				if (!password) return textBytes;
+
+				const salt = crypto.getRandomValues(new Uint8Array(16));
+				const iv = crypto.getRandomValues(new Uint8Array(12));
+				const key = await deriveAesKey(password, salt);
+
+				const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, textBytes);
+				const encryptedBytes = new Uint8Array(encrypted);
+
+				const out = new Uint8Array(ENC_MAGIC.length + salt.length + iv.length + encryptedBytes.length);
+				out.set(ENC_MAGIC, 0);
+				out.set(salt, ENC_MAGIC.length);
+				out.set(iv, ENC_MAGIC.length + 16);
+				out.set(encryptedBytes, ENC_MAGIC.length + 28);
+				return out;
+			}
+
+			async function unprotectBytes(payloadBytes, password) {
+				if (!hasMagic(payloadBytes, ENC_MAGIC)) {
+					return payloadBytes;
+				}
+
+				if (payloadBytes.length < ENC_MAGIC.length + 29) {
+					throw new Error('Corrupted encrypted payload');
+				}
+
+				if (!password) {
+					throw new Error('This image is password-protected');
+				}
+
+				const salt = payloadBytes.slice(ENC_MAGIC.length, ENC_MAGIC.length + 16);
+				const iv = payloadBytes.slice(ENC_MAGIC.length + 16, ENC_MAGIC.length + 28);
+				const encrypted = payloadBytes.slice(ENC_MAGIC.length + 28);
+				const key = await deriveAesKey(password, salt);
+
+				try {
+					const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+					return new Uint8Array(plain);
+				} catch {
+					throw new Error('Wrong password or corrupted payload');
+				}
+			}
+
+			async function buildPayload(text, password) {
+				const textBytes = encoder.encode(text);
+				const storedBytes = await protectBytes(textBytes, password);
+				const lenBytes = u32ToBytes(storedBytes.length);
+
+				const payload = new Uint8Array(8 + storedBytes.length);
 
 				payload.set(MAGIC, 0);
 				payload.set(lenBytes, 4);
-				payload.set(textBytes, 8);
+				payload.set(storedBytes, 8);
 
 				return payload;
 			}
 
-			function encodeTextToImage(text) {
-				const payload = buildPayload(text);
-
+			function encodeBytesToImage(payload) {
 				const pixelsNeeded = Math.ceil(payload.length / 3);
 
 				const width = Math.ceil(Math.sqrt(pixelsNeeded));
@@ -302,7 +394,7 @@ If there is a single lesson that ties these themes together, it is that progress
 				return out;
 			}
 
-			function decodeImageData(imageData) {
+			async function decodeImageData(imageData, password) {
 				const bytes = extractRgbBytes(imageData);
 
 				const magicOk =
@@ -314,15 +406,19 @@ If there is a single lesson that ties these themes together, it is that progress
 
 				const start = 8;
 				const end = start + textLength;
+				if (end > bytes.length) throw new Error('Corrupted encoded payload');
 
-				const textBytes = bytes.slice(start, end);
+				const storedBytes = bytes.slice(start, end);
+				const textBytes = await unprotectBytes(storedBytes, password);
 
 				return decoder.decode(textBytes);
 			}
 
-			function encode() {
+			async function encode() {
 				try {
-					const imageData = encodeTextToImage(textInput.value);
+					const password = passwordInput.value.trim();
+					const payload = await buildPayload(textInput.value, password);
+					const imageData = encodeBytesToImage(payload);
 
 					canvas.width = imageData.width;
 					canvas.height = imageData.height;
@@ -335,11 +431,15 @@ If there is a single lesson that ties these themes together, it is that progress
 				}
 			}
 
-			function decodeCanvas() {
+			async function decodeCanvas() {
 				try {
+					if (!canvas.width || !canvas.height) {
+						throw new Error('Encode first to populate canvas');
+					}
 					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					const password = passwordInput.value.trim();
 
-					const text = decodeImageData(imageData);
+					const text = await decodeImageData(imageData, password);
 
 					output.textContent = text;
 
@@ -379,15 +479,20 @@ If there is a single lesson that ties these themes together, it is that progress
 
 				const imageData = tctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
 
-				const text = decodeImageData(imageData);
+				const password = passwordInput.value.trim();
+				const text = await decodeImageData(imageData, password);
 
 				output.textContent = text;
 
 				fileStatus.textContent = 'Image decoded successfully';
 			}
 
-			document.getElementById('encodeBtn').onclick = encode;
-			document.getElementById('decodeCanvasBtn').onclick = decodeCanvas;
+			document.getElementById('encodeBtn').onclick = async () => {
+				await encode();
+			};
+			document.getElementById('decodeCanvasBtn').onclick = async () => {
+				await decodeCanvas();
+			};
 			document.getElementById('downloadBtn').onclick = downloadPNG;
 
 			document.getElementById('decodeFileBtn').onclick = async () => {

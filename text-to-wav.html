@@ -84,6 +84,28 @@
 				resize: vertical;
 			}
 
+			input[type='password'] {
+				width: 100%;
+				padding: 10px 12px;
+				font-size: 15px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				margin-top: 10px;
+			}
+
+			.label {
+				display: block;
+				margin-top: 12px;
+				font-size: 14px;
+				font-weight: 700;
+			}
+
+			.hint {
+				margin-top: 6px;
+				font-size: 13px;
+				color: var(--muted);
+			}
+
 			.actions {
 				display: flex;
 				flex-wrap: wrap;
@@ -149,6 +171,9 @@
     <textarea id="inputText">Pack my box with five dozen liquor jugs.
 Sphinx of black quartz, judge my vow.
 Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
+				<label class="label" for="passwordInput">Optional Password</label>
+				<input id="passwordInput" type="password" placeholder="Leave empty for plain encoding" />
+				<div class="hint">If set, the same password is required to decode.</div>
 				<div class="actions">
 					<button id="playBtn">Play Message</button>
 					<button id="downloadBtn">Download WAV</button>
@@ -214,6 +239,15 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 
 				textToBits(text) {
 					const bytes = this.textToBytes(text);
+					return this.encodeBytesToBits(bytes);
+				}
+
+				bitsToText(bitString) {
+					const bytes = this.decodeBitsToBytes(bitString);
+					return this.bytesToText(bytes);
+				}
+
+				encodeBytesToBits(bytes) {
 					let payload = '';
 					for (const byte of bytes) {
 						payload += this.byteToBits(byte);
@@ -221,7 +255,7 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 					return this.startMarker + payload + this.endMarker;
 				}
 
-				bitsToText(bitString) {
+				decodeBitsToBytes(bitString) {
 					const startIndex = bitString.indexOf(this.startMarker);
 					if (startIndex === -1) {
 						throw new Error('Start marker not found');
@@ -247,7 +281,7 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 						bytes.push(this.bitsToByte(alignedBits.slice(i, i + 8)));
 					}
 
-					return this.bytesToText(new Uint8Array(bytes));
+					return new Uint8Array(bytes);
 				}
 
 				generateSamplesFromBits(bitString) {
@@ -413,8 +447,12 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 				freq0: 1200,
 				freq1: 2200,
 			});
+			const ENC_MAGIC = [0, 69, 78, 67, 49, 0]; // \0ENC1\0
+			const utf8Encoder = new TextEncoder();
+			const utf8Decoder = new TextDecoder();
 
 			const inputText = document.getElementById('inputText');
+			const passwordInput = document.getElementById('passwordInput');
 			const playBtn = document.getElementById('playBtn');
 			const downloadBtn = document.getElementById('downloadBtn');
 			const startMicBtn = document.getElementById('startMicBtn');
@@ -433,6 +471,68 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 			let mediaRecorder = null;
 			let recordedChunks = [];
 
+			function hasMagic(bytes, magic) {
+				if (!bytes || bytes.length < magic.length) return false;
+				for (let i = 0; i < magic.length; i++) {
+					if (bytes[i] !== magic[i]) return false;
+				}
+				return true;
+			}
+
+			async function deriveAesKey(password, salt) {
+				if (!window.crypto?.subtle) {
+					throw new Error('Web Crypto is not supported in this browser');
+				}
+				const passwordKey = await crypto.subtle.importKey('raw', utf8Encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+				return crypto.subtle.deriveKey(
+					{ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+					passwordKey,
+					{ name: 'AES-GCM', length: 256 },
+					false,
+					['encrypt', 'decrypt']
+				);
+			}
+
+			async function protectBytes(plainBytes, password) {
+				if (!password) return plainBytes;
+
+				const salt = crypto.getRandomValues(new Uint8Array(16));
+				const iv = crypto.getRandomValues(new Uint8Array(12));
+				const key = await deriveAesKey(password, salt);
+				const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plainBytes);
+				const encryptedBytes = new Uint8Array(encrypted);
+
+				const out = new Uint8Array(ENC_MAGIC.length + salt.length + iv.length + encryptedBytes.length);
+				out.set(ENC_MAGIC, 0);
+				out.set(salt, ENC_MAGIC.length);
+				out.set(iv, ENC_MAGIC.length + 16);
+				out.set(encryptedBytes, ENC_MAGIC.length + 28);
+				return out;
+			}
+
+			async function unprotectBytes(payloadBytes, password) {
+				if (!hasMagic(payloadBytes, ENC_MAGIC)) {
+					return payloadBytes;
+				}
+				if (payloadBytes.length < ENC_MAGIC.length + 29) {
+					throw new Error('Corrupted encrypted payload');
+				}
+				if (!password) {
+					throw new Error('This message is password-protected');
+				}
+
+				const salt = payloadBytes.slice(ENC_MAGIC.length, ENC_MAGIC.length + 16);
+				const iv = payloadBytes.slice(ENC_MAGIC.length + 16, ENC_MAGIC.length + 28);
+				const encrypted = payloadBytes.slice(ENC_MAGIC.length + 28);
+				const key = await deriveAesKey(password, salt);
+				try {
+					const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+					return new Uint8Array(plain);
+				} catch {
+					throw new Error('Wrong password or corrupted payload');
+				}
+			}
+
 			function setDecodedResult(result) {
 				decodedBits.textContent = result.bits || '(none)';
 				decodedText.textContent = result.text || '(failed)';
@@ -449,12 +549,12 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 					try {
 						const sliced = channelData.slice(offset);
 						const bits = modemInstance.decodeSamplesToBits(sliced);
-						const text = modemInstance.bitsToText(bits);
+						const payloadBytes = modemInstance.decodeBitsToBytes(bits);
 
 						return {
 							success: true,
 							bits,
-							text,
+							payloadBytes,
 						};
 					} catch (error) {
 						bestFailure = error.message;
@@ -473,19 +573,38 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 				try {
 					sendStatus.textContent = 'Encoding and playing...';
 					const text = inputText.value;
-					const result = await modem.playText(text);
+					const password = passwordInput.value.trim();
+					const plainBytes = utf8Encoder.encode(text);
+					const payloadBytes = await protectBytes(plainBytes, password);
+					const bits = modem.encodeBytesToBits(payloadBytes);
+					const samples = modem.generateSamplesFromBits(bits);
 
-					encodedBits.textContent = result.bits;
-					sendStatus.textContent = `Playing (${result.duration.toFixed(2)} sec)`;
+					const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+						sampleRate: modem.sampleRate,
+					});
+					if (audioContext.state === 'suspended') {
+						await audioContext.resume();
+					}
+					const buffer = modem.createAudioBufferFromSamples(audioContext, samples);
+					const source = audioContext.createBufferSource();
+					source.buffer = buffer;
+					source.connect(audioContext.destination);
+					source.start();
+
+					encodedBits.textContent = bits;
+					sendStatus.textContent = `Playing (${buffer.duration.toFixed(2)} sec)`;
 				} catch (error) {
 					sendStatus.textContent = `Error: ${error.message}`;
 				}
 			});
 
-			downloadBtn.addEventListener('click', () => {
+			downloadBtn.addEventListener('click', async () => {
 				try {
 					const text = inputText.value;
-					const bits = modem.textToBits(text);
+					const password = passwordInput.value.trim();
+					const plainBytes = utf8Encoder.encode(text);
+					const payloadBytes = await protectBytes(plainBytes, password);
+					const bits = modem.encodeBytesToBits(payloadBytes);
 					const samples = modem.generateSamplesFromBits(bits);
 
 					encodedBits.textContent = bits;
@@ -552,11 +671,17 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 					const channel = audioBuffer.getChannelData(0);
 
 					const result = tryDecodeWithOffsets(channel, modem);
+					if (!result.success) {
+						setDecodedResult(result);
+						receiveStatus.textContent = `Decode failed: ${result.error}`;
+						return;
+					}
 
-					setDecodedResult(result);
-					receiveStatus.textContent = result.success
-						? 'Decoded successfully'
-						: `Decode failed: ${result.error}`;
+					const password = passwordInput.value.trim();
+					const decodedBytes = await unprotectBytes(result.payloadBytes, password);
+					const decodedTextValue = utf8Decoder.decode(decodedBytes);
+					setDecodedResult({ bits: result.bits, text: decodedTextValue });
+					receiveStatus.textContent = 'Decoded successfully';
 				} catch (error) {
 					receiveStatus.textContent = `Decode error: ${error.message}`;
 				}
@@ -600,11 +725,17 @@ Encoding test: 0123456789 !?.,:;()[]{}.</textarea>
 					}
 
 					const result = tryDecodeWithOffsets(merged, modem);
+					if (!result.success) {
+						setDecodedResult(result);
+						fileStatus.textContent = `Failed to decode ${file.name}: ${result.error}`;
+						return;
+					}
 
-					setDecodedResult(result);
-					fileStatus.textContent = result.success
-						? `Decoded from file: ${file.name}`
-						: `Failed to decode ${file.name}: ${result.error}`;
+					const password = passwordInput.value.trim();
+					const decodedBytes = await unprotectBytes(result.payloadBytes, password);
+					const decodedTextValue = utf8Decoder.decode(decodedBytes);
+					setDecodedResult({ bits: result.bits, text: decodedTextValue });
+					fileStatus.textContent = `Decoded from file: ${file.name}`;
 				} catch (error) {
 					fileStatus.textContent = `File decode error: ${error.message}`;
 				}

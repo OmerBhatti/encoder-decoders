@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Steganography: Text in Image</title>
+		<style>
+			:root {
+				--bg: #f8f9fb;
+				--text: #222;
+				--card: #fff;
+				--border: #d9dce3;
+				--muted: #4d5563;
+				--link: #1658d6;
+				--link-hover: #0f47b4;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				font-family: Arial, sans-serif;
+				background: var(--bg);
+				color: var(--text);
+				line-height: 1.5;
+			}
+
+			main {
+				max-width: 980px;
+				margin: 44px auto;
+				padding: 0 16px 32px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: 32px;
+			}
+
+			h2 {
+				margin: 0 0 12px;
+				font-size: 22px;
+			}
+
+			h3 {
+				margin: 16px 0 8px;
+				font-size: 17px;
+			}
+
+			.subtitle {
+				margin: 10px 0 24px;
+				color: var(--muted);
+			}
+
+			.back-link {
+				display: inline-block;
+				margin-bottom: 14px;
+				color: var(--link);
+				text-decoration: none;
+				font-weight: 700;
+			}
+
+			.back-link:hover {
+				color: var(--link-hover);
+				text-decoration: underline;
+			}
+
+			.card {
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 16px;
+				margin-top: 14px;
+			}
+
+			textarea {
+				width: 100%;
+				min-height: 120px;
+				padding: 12px;
+				font-size: 16px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				resize: vertical;
+			}
+
+			input[type='password'] {
+				width: 100%;
+				padding: 10px 12px;
+				font-size: 15px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				margin-top: 8px;
+			}
+
+			.label {
+				display: block;
+				margin-top: 8px;
+				font-size: 14px;
+				font-weight: 700;
+			}
+
+			.actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-top: 12px;
+			}
+
+			button,
+			input[type='file'] {
+				padding: 9px 13px;
+				border-radius: 8px;
+				font-size: 14px;
+			}
+
+			button {
+				border: 1px solid transparent;
+				background: var(--link);
+				color: #fff;
+				cursor: pointer;
+			}
+
+			button:hover {
+				background: var(--link-hover);
+			}
+
+			input[type='file'] {
+				border: 1px solid var(--border);
+				background: #fff;
+				color: var(--muted);
+			}
+
+			canvas,
+			img {
+				display: block;
+				max-width: 100%;
+				border: 1px solid var(--border);
+				background: #fff;
+			}
+
+			img:not([src]),
+			img[src=''] {
+				display: none;
+			}
+
+			pre {
+				white-space: pre-wrap;
+				word-break: break-word;
+				background: #f4f6fa;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 12px;
+				margin: 0;
+			}
+
+			.status {
+				margin-top: 10px;
+				font-weight: 700;
+				color: #1e3a8a;
+			}
+
+			.meta {
+				margin-top: 8px;
+				color: var(--muted);
+				font-size: 14px;
+			}
+
+			.tabs {
+				display: flex;
+				gap: 8px;
+				margin-top: 14px;
+			}
+
+			.tab-btn {
+				background: #fff;
+				border: 1px solid var(--border);
+				color: var(--text);
+			}
+
+			.tab-btn.active {
+				background: var(--link);
+				border-color: var(--link);
+				color: #fff;
+			}
+
+			.tab-panel {
+				display: none;
+			}
+
+			.tab-panel.active {
+				display: block;
+			}
+
+			@media (max-width: 640px) {
+				h1 {
+					font-size: 28px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<a class="back-link" href="./index.html">&#8592; Back to Encoders</a>
+			<h1>Steganography (Encode Text into Image)</h1>
+			<p class="subtitle">
+				Writer: hide UTF-8 text in image pixels (RGB least-significant bits). Reader: extract hidden text from a
+				stego image.
+			</p>
+
+			<section class="card">
+				<h2>Security</h2>
+				<label class="label" for="passwordInput">Optional Password</label>
+				<input id="passwordInput" type="password" placeholder="Leave empty for plain encoding" />
+				<div class="meta">If set while writing, the same password is required while reading.</div>
+			</section>
+
+			<div class="tabs" role="tablist" aria-label="Steganography modes">
+				<button class="tab-btn active" id="tabWriter" data-tab="writer" role="tab" aria-selected="true">Writer</button>
+				<button class="tab-btn" id="tabReader" data-tab="reader" role="tab" aria-selected="false">Reader</button>
+			</div>
+
+			<section class="card tab-panel active" id="panelWriter" data-panel="writer" role="tabpanel">
+				<h2>Writer</h2>
+				<input id="carrierInput" type="file" accept="image/png,image/jpeg,image/webp,image/*" />
+				<div class="meta" id="capacityInfo">Load an image to see embedding capacity.</div>
+
+				<h3>Secret Message</h3>
+				<textarea id="secretInput">
+Top secret: this message is hidden in image pixel bytes.
+Only someone with the reader can decode it.
+</textarea>
+
+				<div class="actions">
+					<button id="encodeBtn">Embed Message</button>
+					<button id="downloadBtn">Download Stego PNG</button>
+				</div>
+
+				<div class="status" id="writerStatus">Writer idle</div>
+
+				<h3>Stego Output</h3>
+				<canvas id="writerCanvas"></canvas>
+			</section>
+
+			<section class="card tab-panel" id="panelReader" data-panel="reader" role="tabpanel">
+				<h2>Reader</h2>
+				<input id="readerInput" type="file" accept="image/png,image/jpeg,image/webp,image/*" />
+				<div class="actions">
+					<button id="decodeBtn">Decode Message</button>
+				</div>
+				<div class="status" id="readerStatus">Reader idle</div>
+
+				<h3>Selected Image</h3>
+				<img id="readerPreview" alt="Selected stego image preview" />
+
+				<h3>Decoded Secret</h3>
+				<pre id="decodedOutput">(none)</pre>
+			</section>
+		</main>
+
+		<script>
+			const MAGIC = [83, 84, 69, 71]; // STEG
+			const ENC_MAGIC = [0, 69, 78, 67, 49, 0]; // \0ENC1\0
+
+			const encoder = new TextEncoder();
+			const decoder = new TextDecoder();
+			const passwordInput = document.getElementById('passwordInput');
+			const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
+			const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
+
+			const carrierInput = document.getElementById('carrierInput');
+			const secretInput = document.getElementById('secretInput');
+			const encodeBtn = document.getElementById('encodeBtn');
+			const downloadBtn = document.getElementById('downloadBtn');
+			const writerStatus = document.getElementById('writerStatus');
+			const capacityInfo = document.getElementById('capacityInfo');
+			const writerCanvas = document.getElementById('writerCanvas');
+			const writerCtx = writerCanvas.getContext('2d', { willReadFrequently: true });
+
+			const readerInput = document.getElementById('readerInput');
+			const decodeBtn = document.getElementById('decodeBtn');
+			const readerStatus = document.getElementById('readerStatus');
+			const readerPreview = document.getElementById('readerPreview');
+			const decodedOutput = document.getElementById('decodedOutput');
+
+			let baseImageData = null;
+			let hasEmbeddedOutput = false;
+
+			function setActiveTab(tabName) {
+				for (const button of tabButtons) {
+					const isActive = button.dataset.tab === tabName;
+					button.classList.toggle('active', isActive);
+					button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+				}
+
+				for (const panel of tabPanels) {
+					const isActive = panel.dataset.panel === tabName;
+					panel.classList.toggle('active', isActive);
+				}
+			}
+
+			function u32ToBytes(num) {
+				return new Uint8Array([(num >>> 24) & 255, (num >>> 16) & 255, (num >>> 8) & 255, num & 255]);
+			}
+
+			function bytesToU32(arr, offset) {
+				return ((arr[offset] << 24) | (arr[offset + 1] << 16) | (arr[offset + 2] << 8) | arr[offset + 3]) >>> 0;
+			}
+
+			function hasMagic(bytes, magic) {
+				if (!bytes || bytes.length < magic.length) return false;
+				for (let i = 0; i < magic.length; i++) {
+					if (bytes[i] !== magic[i]) return false;
+				}
+				return true;
+			}
+
+			async function deriveAesKey(password, salt) {
+				if (!window.crypto?.subtle) {
+					throw new Error('Web Crypto is not supported in this browser');
+				}
+				const passwordKey = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+				return crypto.subtle.deriveKey(
+					{ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+					passwordKey,
+					{ name: 'AES-GCM', length: 256 },
+					false,
+					['encrypt', 'decrypt']
+				);
+			}
+
+			async function protectBytes(plainBytes, password) {
+				if (!password) return plainBytes;
+
+				const salt = crypto.getRandomValues(new Uint8Array(16));
+				const iv = crypto.getRandomValues(new Uint8Array(12));
+				const key = await deriveAesKey(password, salt);
+				const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plainBytes);
+				const encryptedBytes = new Uint8Array(encrypted);
+
+				const out = new Uint8Array(ENC_MAGIC.length + salt.length + iv.length + encryptedBytes.length);
+				out.set(ENC_MAGIC, 0);
+				out.set(salt, ENC_MAGIC.length);
+				out.set(iv, ENC_MAGIC.length + 16);
+				out.set(encryptedBytes, ENC_MAGIC.length + 28);
+				return out;
+			}
+
+			async function unprotectBytes(payloadBytes, password) {
+				if (!hasMagic(payloadBytes, ENC_MAGIC)) return payloadBytes;
+				if (payloadBytes.length < ENC_MAGIC.length + 29) throw new Error('Corrupted encrypted payload');
+				if (!password) throw new Error('This hidden message is password-protected');
+
+				const salt = payloadBytes.slice(ENC_MAGIC.length, ENC_MAGIC.length + 16);
+				const iv = payloadBytes.slice(ENC_MAGIC.length + 16, ENC_MAGIC.length + 28);
+				const encrypted = payloadBytes.slice(ENC_MAGIC.length + 28);
+				const key = await deriveAesKey(password, salt);
+				try {
+					const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+					return new Uint8Array(plain);
+				} catch {
+					throw new Error('Wrong password or corrupted payload');
+				}
+			}
+
+			function loadImageFromFile(file) {
+				return new Promise((resolve, reject) => {
+					const img = new Image();
+					const url = URL.createObjectURL(file);
+					img.onload = () => {
+						URL.revokeObjectURL(url);
+						resolve(img);
+					};
+					img.onerror = () => {
+						URL.revokeObjectURL(url);
+						reject(new Error('Unable to load image'));
+					};
+					img.src = url;
+				});
+			}
+
+			function toBits(bytes) {
+				const bits = new Uint8Array(bytes.length * 8);
+				let bitIndex = 0;
+
+				for (const byte of bytes) {
+					for (let shift = 7; shift >= 0; shift--) {
+						bits[bitIndex++] = (byte >> shift) & 1;
+					}
+				}
+
+				return bits;
+			}
+
+			function bitsToBytes(bits) {
+				const byteCount = Math.floor(bits.length / 8);
+				const bytes = new Uint8Array(byteCount);
+
+				for (let i = 0; i < byteCount; i++) {
+					let value = 0;
+					for (let bit = 0; bit < 8; bit++) {
+						value = (value << 1) | bits[i * 8 + bit];
+					}
+					bytes[i] = value;
+				}
+
+				return bytes;
+			}
+
+			async function buildPayload(text, password) {
+				const plainTextBytes = encoder.encode(text);
+				const storedBytes = await protectBytes(plainTextBytes, password);
+				const lengthBytes = u32ToBytes(storedBytes.length);
+
+				const payload = new Uint8Array(8 + storedBytes.length);
+				payload.set(MAGIC, 0);
+				payload.set(lengthBytes, 4);
+				payload.set(storedBytes, 8);
+				return payload;
+			}
+
+			function imageCapacityBytes(imageData) {
+				const capacityBits = imageData.width * imageData.height * 3;
+				return Math.floor(capacityBits / 8);
+			}
+
+			function embedPayload(imageData, payload) {
+				const capacityBits = imageData.width * imageData.height * 3;
+				const payloadBits = toBits(payload);
+
+				if (payloadBits.length > capacityBits) {
+					throw new Error('Message is too large for this image');
+				}
+
+				const data = imageData.data;
+				let bitIndex = 0;
+
+				for (let i = 0; i < data.length && bitIndex < payloadBits.length; i += 4) {
+					for (let channel = 0; channel < 3 && bitIndex < payloadBits.length; channel++) {
+						data[i + channel] = (data[i + channel] & 254) | payloadBits[bitIndex++];
+					}
+				}
+
+				return imageData;
+			}
+
+			function extractBits(imageData, count) {
+				const bits = new Uint8Array(count);
+				const data = imageData.data;
+				let bitIndex = 0;
+
+				for (let i = 0; i < data.length && bitIndex < count; i += 4) {
+					for (let channel = 0; channel < 3 && bitIndex < count; channel++) {
+						bits[bitIndex++] = data[i + channel] & 1;
+					}
+				}
+
+				return bits;
+			}
+
+			async function decodePayload(imageData, password) {
+				const capacityBits = imageData.width * imageData.height * 3;
+				if (capacityBits < 64) {
+					throw new Error('Image is too small to contain a payload header');
+				}
+
+				const headerBits = extractBits(imageData, 64);
+				const header = bitsToBytes(headerBits);
+
+				const magicOk =
+					header[0] === MAGIC[0] && header[1] === MAGIC[1] && header[2] === MAGIC[2] && header[3] === MAGIC[3];
+				if (!magicOk) {
+					throw new Error('No steganography payload found (invalid magic header)');
+				}
+
+				const textLength = bytesToU32(header, 4);
+				const totalPayloadBytes = 8 + textLength;
+				const totalPayloadBits = totalPayloadBytes * 8;
+
+				if (totalPayloadBits > capacityBits) {
+					throw new Error('Corrupted payload length or incomplete image data');
+				}
+
+				const payloadBits = extractBits(imageData, totalPayloadBits);
+				const payloadBytes = bitsToBytes(payloadBits);
+
+				const storedBytes = payloadBytes.slice(8, 8 + textLength);
+				const textBytes = await unprotectBytes(storedBytes, password);
+				return decoder.decode(textBytes);
+			}
+
+			async function loadCarrierImage(file) {
+				const img = await loadImageFromFile(file);
+				writerCanvas.width = img.width;
+				writerCanvas.height = img.height;
+				writerCtx.drawImage(img, 0, 0);
+
+				baseImageData = writerCtx.getImageData(0, 0, img.width, img.height);
+
+				const capacityBytes = imageCapacityBytes(baseImageData);
+				const usableBytes = Math.max(0, capacityBytes - 8);
+				capacityInfo.textContent = `Image: ${img.width} x ${img.height} | Capacity: ${usableBytes.toLocaleString()} UTF-8 bytes (after header)`;
+				writerStatus.textContent = 'Carrier image loaded';
+				hasEmbeddedOutput = false;
+			}
+
+			carrierInput.addEventListener('change', async () => {
+				try {
+					const file = carrierInput.files?.[0];
+					if (!file) {
+						baseImageData = null;
+						hasEmbeddedOutput = false;
+						capacityInfo.textContent = 'Load an image to see embedding capacity.';
+						writerStatus.textContent = 'Writer idle';
+						return;
+					}
+					await loadCarrierImage(file);
+				} catch (error) {
+					baseImageData = null;
+					hasEmbeddedOutput = false;
+					writerStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			encodeBtn.addEventListener('click', async () => {
+				try {
+					if (!baseImageData) {
+						throw new Error('Select a carrier image first');
+					}
+
+					const password = passwordInput.value.trim();
+					const payload = await buildPayload(secretInput.value, password);
+					const sourceCopy = new ImageData(
+						new Uint8ClampedArray(baseImageData.data),
+						baseImageData.width,
+						baseImageData.height
+					);
+
+					const stegoData = embedPayload(sourceCopy, payload);
+					writerCtx.putImageData(stegoData, 0, 0);
+					hasEmbeddedOutput = true;
+
+					writerStatus.textContent = `Embedded ${payload.length - 8} bytes into ${stegoData.width} x ${stegoData.height} image`;
+				} catch (error) {
+					hasEmbeddedOutput = false;
+					writerStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			downloadBtn.addEventListener('click', () => {
+				if (!baseImageData || !hasEmbeddedOutput) {
+					writerStatus.textContent = 'Nothing to download. Load and encode an image first.';
+					return;
+				}
+
+				const a = document.createElement('a');
+				a.href = writerCanvas.toDataURL('image/png');
+				a.download = 'stego-image.png';
+				a.click();
+			});
+
+			readerInput.addEventListener('change', async () => {
+				try {
+					const file = readerInput.files?.[0];
+					if (!file) {
+						readerPreview.removeAttribute('src');
+						readerStatus.textContent = 'Reader idle';
+						return;
+					}
+
+					const url = URL.createObjectURL(file);
+					readerPreview.src = url;
+					readerPreview.onload = () => URL.revokeObjectURL(url);
+					readerStatus.textContent = `Selected: ${file.name}`;
+				} catch (error) {
+					readerStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			decodeBtn.addEventListener('click', async () => {
+				try {
+					const file = readerInput.files?.[0];
+					if (!file) {
+						throw new Error('Select an image to decode first');
+					}
+
+					const img = await loadImageFromFile(file);
+					const tempCanvas = document.createElement('canvas');
+					tempCanvas.width = img.width;
+					tempCanvas.height = img.height;
+
+					const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+					tempCtx.drawImage(img, 0, 0);
+
+					const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+					const password = passwordInput.value.trim();
+					const text = await decodePayload(imageData, password);
+
+					decodedOutput.textContent = text;
+					readerStatus.textContent = 'Secret message decoded successfully';
+				} catch (error) {
+					decodedOutput.textContent = '(none)';
+					readerStatus.textContent = `Error: ${error.message}`;
+				}
+			});
+
+			for (const button of tabButtons) {
+				button.addEventListener('click', () => setActiveTab(button.dataset.tab));
+			}
+			setActiveTab('writer');
+		</script>
+	</body>
+</html>

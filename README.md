@@ -1,9 +1,12 @@
 # Encoder-Decoders
 
-Small browser-based demos for encoding and decoding text in two different formats:
+Small browser-based demos for encoding and decoding text across image/audio formats:
 
 - `Text <-> RGB Pixel Encoder`: stores text bytes directly inside PNG pixel RGB channels.
 - `Text <-> WAV Audio Encoder`: converts text into audio tones and decodes tones back into text.
+- `Steganography (Text in Image)`: hides secret text inside image pixel LSB bits and reads it back.
+
+All encoders support an optional password for AES-GCM encryption. If a message is encoded with a password, the same password is required to decode.
 
 ## Live Deployment
 
@@ -13,9 +16,10 @@ Open the deployed project here:
 
 ## Pages
 
-- `index.html`: landing page linking to both tools.
+- `index.html`: landing page linking to all tools.
 - `text-to-rgb.html`: text to PNG encoder/decoder (canvas + uploaded image decoding).
 - `text-to-wav.html`: text to audio modem encoder/decoder (playback, WAV download, mic/file decode).
+- `steganography.html`: image steganography writer/reader (embed secret text + decode from image).
 
 ## How To Use
 
